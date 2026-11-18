@@ -1,0 +1,12 @@
+# 晨羽智云 Pod 镜像、GPU 队列与会话工作流面板。
+- insert:
+    - id: chenyu-workflow
+      name: '@local/dsh-chenyu-workflow'
+      config:
+        baseUrl: https://www.chenyu.cn/api/open/v2
+        apiKeyRef: CHENYU_API_KEY
+        outputDir: generated/chenyu
+        autoShutdown: true
+        queueIdleGraceMs: 0
+        defaultImageGpu: c873233d835647ea8d985f370792a85a
+        defaultVideoGpu: d92a57488465f63af5eaab49b403952f

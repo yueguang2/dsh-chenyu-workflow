@@ -1,0 +1,33 @@
+{
+  "name": "@local/dsh-chenyu-workflow",
+  "version": "0.6.0",
+  "private": true,
+  "description": "在会话里选择晨羽 Pod 镜像版本、云端 ComfyUI 工作流和显卡，按需开机、串行执行、自动关机。",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  }
+}
