@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { resolve } from 'node:path'
 import { buildJobSpec } from '../lib/job-spec.mjs'
 import { ComfyError, convertWorkflowToPrompt } from '../lib/comfy.mjs'
 import { runWorkflowJob } from '../lib/runner.mjs'
@@ -198,8 +199,8 @@ test('new jobs persist absolute paths and older jobs retain manual overrides and
   assert.equal(spec.seed, 520)
   assert.equal(spec.duration, 5)
   assert.equal(spec.prompt_node, '')
-  assert.deepEqual(spec.reference_images, ['/tmp/workspace/ref.png'])
-  assert.equal(spec.files[101].path, '/tmp/workspace/other.png')
+  assert.deepEqual(spec.reference_images, [resolve('/tmp/workspace', 'ref.png')])
+  assert.equal(spec.files[101].path, resolve('/tmp/workspace', 'other.png'))
 
   const legacy = { workflow_name: 'YZ金鱼-MOSS-文生图.json', workflow_label: 'MOSS 文生图', prompt_node: '88', prompt_input: 'value', prompt: 'rose', overrides: { 110: { seed: 25 } }, files: { 96: '/tmp/rose.png' } }
   const prepared = prepareWorkflow(moss(), mossInfo, legacy)

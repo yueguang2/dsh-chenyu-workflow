@@ -1,4 +1,4 @@
-/** Chenyu workflow settings and session input dock. */
+/** Chenyu workflow settings and session input dock - Optimized Version */
 window.__ModuleLoader__.load({
   id: '@local/dsh-chenyu-workflow',
   factory: (require) => {
@@ -7,11 +7,182 @@ window.__ModuleLoader__.load({
     const API = '/api/chenyu-workflow'
     const LIBRARY_CHANGED = 'chenyu-workflow:library-changed'
     const OPEN_WORKFLOWS = 'chenyu-workflow:open'
+    
+    // ============================================================================
+    // Constants
+    // ============================================================================
+    const STATUS = {
+      PENDING: 'pending',
+      QUEUED: 'queued',
+      RUNNING: 'running',
+      SUCCEEDED: 'succeeded',
+      FAILED: 'failed',
+      CANCELLED: 'cancelled',
+      CANCELED: 'canceled',
+    }
+    
+    const POLL_INTERVAL = {
+      ACTIVE: 1700,
+      IDLE: 6500,
+      ADAPTIVE_MAX: 10000,
+    }
+    
+    const DRAFT_STORAGE = {
+      PREFIX: 'chenyu_draft_',
+      TTL: 7 * 24 * 60 * 60 * 1000, // 7 days
+    }
+    
+    // ============================================================================
+    // Utility Functions
+    // ============================================================================
     const list = (value) => Array.isArray(value) ? value : []
-    const messageOf = (error) => String(error?.message || error)
     const query = (fields) => new URLSearchParams(Object.entries(fields).filter(([, value]) => value != null)).toString()
     const notifyLibrary = () => window.dispatchEvent(new Event(LIBRARY_CHANGED))
     const noSubscribe = () => () => {}
+    
+    // Error handling
+    function extractErrorMessage(error) {
+      if (!error) return ''
+      if (typeof error === 'string') return error
+      if (error.message) return String(error.message)
+      if (error.error) return extractErrorMessage(error.error)
+      return String(error)
+    }
+    
+    function friendlyErrorMessage(error, t) {
+      const message = extractErrorMessage(error)
+      // Without a translator (for example in a background poll) keep the
+      // original message so the UI never shows text in the wrong language.
+      if (!t) return message
+      
+      if (/network|fetch.*failed|ECONNREFUSED/i.test(message)) {
+        return t?.('networkError') || '网络连接失败，请检查网络设置'
+      }
+      if (/timeout|ETIMEDOUT/i.test(message)) {
+        return t?.('timeoutError') || '请求超时，请稍后重试'
+      }
+      if (/unauthorized|401|invalid.*key/i.test(message)) {
+        return t?.('authError') || 'API Key 无效或已过期，请在设置中更新'
+      }
+      if (/insufficient.*balance|余额不足/i.test(message)) {
+        return t?.('quotaError') || '账户余额不足，请充值后重试'
+      }
+      if (/gpu.*unavailable|显卡不可用/i.test(message)) {
+        return t?.('gpuUnavailable') || '所选显卡暂时不可用，请选择其他显卡'
+      }
+      if (/500|502|503|504|server error/i.test(message)) {
+        return t?.('serviceUnavailable') || '服务暂时不可用，请稍后重试'
+      }
+      
+      return message
+    }
+    
+    const messageOf = (error) => extractErrorMessage(error)
+    
+    // Draft storage
+    function saveDraft(key, data) {
+      try {
+        const stored = { data, timestamp: Date.now(), version: 1 }
+        localStorage.setItem(DRAFT_STORAGE.PREFIX + key, JSON.stringify(stored))
+      } catch (err) {
+        console.warn('Failed to save draft:', err)
+      }
+    }
+    
+    function loadDraft(key) {
+      try {
+        const item = localStorage.getItem(DRAFT_STORAGE.PREFIX + key)
+        if (!item) return null
+        
+        const stored = JSON.parse(item)
+        if (Date.now() - stored.timestamp > DRAFT_STORAGE.TTL) {
+          localStorage.removeItem(DRAFT_STORAGE.PREFIX + key)
+          return null
+        }
+        
+        return stored.data
+      } catch (err) {
+        console.warn('Failed to load draft:', err)
+        return null
+      }
+    }
+    
+    // Notifications
+    let notificationPermission = typeof Notification !== 'undefined' ? Notification.permission : 'denied'
+    
+    function requestNotificationPermission() {
+      if (typeof Notification === 'undefined' || notificationPermission === 'granted') return
+      
+      Notification.requestPermission().then((permission) => {
+        notificationPermission = permission
+      }).catch(() => {})
+    }
+    
+    function showJobNotification(job, t) {
+      if (typeof Notification === 'undefined' || notificationPermission !== 'granted') return
+      
+      try {
+        const name = job.workflow_label || job.name || job.workflow_name || t?.('workflow') || '工作流'
+        const status = job.status
+        
+        let title = '', body = ''
+        
+        if (status === STATUS.SUCCEEDED) {
+          title = t?.('notificationSucceeded', { name }) || `${name} 已完成`
+          body = t?.('notificationSucceededBody') || '任务执行成功'
+        } else if (status === STATUS.FAILED) {
+          title = t?.('notificationFailed', { name }) || `${name} 失败`
+          body = job.error || t?.('notificationFailedBody') || '任务执行失败'
+        } else if (status === STATUS.CANCELLED || status === STATUS.CANCELED) {
+          title = t?.('notificationCancelled', { name }) || `${name} 已取消`
+          body = t?.('notificationCancelledBody') || '任务已被取消'
+        } else {
+          return
+        }
+        
+        const notification = new Notification(title, {
+          body,
+          icon: '/favicon.ico',
+          tag: `chenyu-job-${job.id || job.job_id}`,
+          requireInteraction: false,
+        })
+        
+        setTimeout(() => notification.close(), 5000)
+      } catch (err) {
+        console.warn('Failed to show notification:', err)
+      }
+    }
+    
+    // Adaptive polling
+    class AdaptivePoller {
+      constructor() {
+        this.currentInterval = POLL_INTERVAL.ACTIVE
+        this.consecutiveIdle = 0
+      }
+      
+      getInterval(hasWork) {
+        if (hasWork) {
+          this.consecutiveIdle = 0
+          this.currentInterval = POLL_INTERVAL.ACTIVE
+        } else {
+          this.consecutiveIdle++
+          if (this.consecutiveIdle > 3) {
+            this.currentInterval = Math.min(
+              this.currentInterval * 1.5,
+              POLL_INTERVAL.ADAPTIVE_MAX
+            )
+          } else {
+            this.currentInterval = POLL_INTERVAL.IDLE
+          }
+        }
+        return this.currentInterval
+      }
+      
+      reset() {
+        this.currentInterval = POLL_INTERVAL.ACTIVE
+        this.consecutiveIdle = 0
+      }
+    }
 
     const CSS = `
 .cy-dock,.cy-settings,.cy-quick-launch{--cy-border:var(--dsw-alias-border-l1);--cy-bg:var(--dsw-alias-bg-layer-2);--cy-input:var(--dsw-alias-bg-layer-3);--cy-muted:var(--dsw-alias-label-secondary);--cy-accent:var(--dsw-alias-state-business-primary);--cy-error:var(--dsw-alias-state-error-primary);color:var(--dsw-alias-label-primary,inherit);font-size:13px}
@@ -135,14 +306,24 @@ window.__ModuleLoader__.load({
         h(Button, { onClick: copy.retry }, copy.t('refresh'))) : note(copy.t('loading'))
     }
 
-    function useSessionJobs(sessionId, open) {
+    // Optimized useSessionJobs with adaptive polling
+    function useSessionJobs(sessionId, open, t) {
+      // Keep the latest translator in a ref so a locale change never restarts
+      // polling and the poll callback never captures a stale copy.
+      const translate = useRef(t)
+      translate.current = t
       const [state, setState] = useState({})
       const [revision, setRevision] = useState(0)
       const refresh = useCallback(() => setRevision((value) => value + 1), [])
+      const pollerRef = useRef(new AdaptivePoller())
+      const lastJobsRef = useRef({})
+      
       useEffect(() => {
         if (!sessionId) return
         const controller = new AbortController()
+        const poller = pollerRef.current
         let timer
+        
         async function poll() {
           let hasWork = false
           try {
@@ -159,20 +340,42 @@ window.__ModuleLoader__.load({
               snapshot[key] = list(data[key]).filter((job) => job?.session_id === sessionId)
             }
             hasWork = Boolean(snapshot.active.length || snapshot.queued.length || snapshot.shutting_down)
+            
+            // Check for status changes and show notifications
+            const currentJobs = {}
+            for (const job of [...snapshot.active, ...snapshot.queued, ...snapshot.history]) {
+              const jobId = job.id || job.job_id
+              if (jobId) {
+                const lastJob = lastJobsRef.current[jobId]
+                if (lastJob && lastJob.status !== job.status) {
+                  if ([STATUS.SUCCEEDED, STATUS.FAILED, STATUS.CANCELLED, STATUS.CANCELED].includes(job.status)) {
+                    showJobNotification(job, translate.current)
+                  }
+                }
+                currentJobs[jobId] = job
+              }
+            }
+            lastJobsRef.current = currentJobs
+            
             if (!controller.signal.aborted) setState({ snapshot })
           } catch (error) {
             if (!controller.signal.aborted) setState((previous) => ({ ...previous, error: messageOf(error) }))
           } finally {
-            if (!controller.signal.aborted) timer = setTimeout(poll, hasWork || open ? 1700 : 6500)
+            if (!controller.signal.aborted) {
+              const interval = open || hasWork ? poller.getInterval(hasWork) : POLL_INTERVAL.IDLE
+              timer = setTimeout(poll, interval)
+            }
           }
         }
+        
         void poll()
         return () => { controller.abort(); clearTimeout(timer) }
       }, [sessionId, open, revision])
+      
       return { ...state, refresh }
     }
 
-    function useAction() {
+    function useAction(t) {
       const [busy, setBusy] = useState('')
       const [feedback, setFeedback] = useState(null)
       const lock = useRef(false)
@@ -185,13 +388,13 @@ window.__ModuleLoader__.load({
           const result = await task()
           if (success) setFeedback({ text: typeof success === 'function' ? success(result) : success })
         } catch (error) {
-          setFeedback({ error: true, text: messageOf(error) })
+          setFeedback({ error: true, text: friendlyErrorMessage(error, t) })
         } finally {
           lock.current = false
           setBusy('')
         }
       }
-      return { busy, feedback, run, clear: () => setFeedback(null), fail: (error) => setFeedback({ error: true, text: messageOf(error) }) }
+      return { busy, feedback, run, clear: () => setFeedback(null), fail: (error) => setFeedback({ error: true, text: friendlyErrorMessage(error, t) }) }
     }
 
     function gpuId(catalog, saved) {
@@ -213,7 +416,9 @@ window.__ModuleLoader__.load({
     function workflowPayload(draft, workflowName, workflowType, t) {
       const values = { workflow_name: workflowName, workflow_type: workflowType, prompt: draft.prompt }
       for (const [key, label, min, max, integer] of [
-        ['seed', 'seed', 0, Number.MAX_SAFE_INTEGER, true], ['duration', 'duration', 1, 15, false], ['megapixels', 'megapixels', Number.MIN_VALUE, Infinity, false],
+        ['seed', 'seed', 0, Number.MAX_SAFE_INTEGER, true], 
+        ['duration', 'duration', 1, 15, false], 
+        ['megapixels', 'megapixels', Number.MIN_VALUE, Infinity, false],
       ]) {
         if (!draft[key]?.trim()) continue
         const value = Number(draft[key])
@@ -259,11 +464,11 @@ window.__ModuleLoader__.load({
     function JobRow({ job, t, sessionId, busy, act }) {
       const jobId = job.id || job.job_id
       const name = job.kind === 'scan' ? t('scanJob') : job.workflow_label || job.name || job.workflow_name || t('workflow')
-      const running = job.status === 'running'
-      const cancel = Boolean(jobId && (running || job.status === 'queued'))
-      const retry = Boolean(jobId && ['failed', 'cancelled', 'canceled'].includes(job.status))
-      const status = ['queued', 'running', 'succeeded', 'failed', 'cancelled', 'canceled'].includes(job.status)
-        ? t(job.status === 'canceled' ? 'cancelled' : job.status) : job.status || t('unknown')
+      const running = job.status === STATUS.RUNNING
+      const cancel = Boolean(jobId && (running || job.status === STATUS.QUEUED))
+      const retry = Boolean(jobId && [STATUS.FAILED, STATUS.CANCELLED, STATUS.CANCELED].includes(job.status))
+      const status = [STATUS.QUEUED, STATUS.RUNNING, STATUS.SUCCEEDED, STATUS.FAILED, STATUS.CANCELLED, STATUS.CANCELED].includes(job.status)
+        ? t(job.status === STATUS.CANCELED ? 'cancelled' : job.status) : job.status || t('unknown')
       const progress = Number(job.progress)
       return h('li', { className: 'cy-job' },
         h('div', { className: 'cy-row' }, h('strong', null, name), pill(status),
@@ -298,7 +503,7 @@ window.__ModuleLoader__.load({
 
     function WorkflowPanel({ sessionId, jobs, t }) {
       const library = useLibrary()
-      const action = useAction()
+      const action = useAction(t)
       const attempt = useRef(null)
       const [modeChoice, setMode] = useState('')
       const [podChoice, setPod] = useState('')
@@ -306,9 +511,20 @@ window.__ModuleLoader__.load({
       const [instanceChoice, setInstance] = useState('')
       const [gpuChoice, setGpu] = useState('')
       const [workflowChoice, setWorkflow] = useState({ key: '', value: '', manual: '' })
-      const [draft, setDraft] = useState({ workflow_type: 'auto', prompt: '' })
+      const [draft, setDraft] = useState(() => {
+        const saved = loadDraft(sessionId)
+        return saved || { workflow_type: 'auto', prompt: '' }
+      })
       const [confirmedScan, setConfirmedScan] = useState('')
       const [acceptedScan, setAcceptedScan] = useState(null)
+      
+      // Auto-save draft
+      useEffect(() => {
+        if (sessionId && draft.prompt) {
+          saveDraft(sessionId, draft)
+        }
+      }, [sessionId, draft])
+      
       const { snapshot } = jobs
       const data = library.data
       const pods = list(data?.pods)
@@ -356,8 +572,8 @@ window.__ModuleLoader__.load({
       const sameScanSource = (job) => job?.kind === 'scan' && (source?.pod_uuid
         ? job.pod_uuid === source.pod_uuid && job.pod_tag === source.pod_tag
         : Boolean(source?.instance_uuid && !job.pod_uuid && job.instance_uuid === source.instance_uuid))
-      const scanInProgress = allJobs.some((job) => sameScanSource(job) && ['queued', 'running'].includes(job.status))
-      const scannedJob = list(snapshot?.history).find((job) => job.status === 'succeeded' && (sameScanSource(job)
+      const scanInProgress = allJobs.some((job) => sameScanSource(job) && [STATUS.QUEUED, STATUS.RUNNING].includes(job.status))
+      const scannedJob = list(snapshot?.history).find((job) => job.status === STATUS.SUCCEEDED && (sameScanSource(job)
         || (acceptedScan?.key === sourceKey && acceptedScan?.id && (job.id || job.job_id) === acceptedScan.id)))
       const scanCompletion = scannedJob?.id || scannedJob?.job_id || ''
       const seenScan = useRef('')
@@ -371,6 +587,9 @@ window.__ModuleLoader__.load({
 
       const postJob = (kind, params, success) => {
         if (!sessionId) return
+        // Ask for notification permission from this click so results can be
+        // announced when the user has switched to another session.
+        requestNotificationPermission()
         void action.run(kind, async () => {
           const body = { action: kind, session_id: sessionId, ...params }
           const key = JSON.stringify(body)
@@ -482,7 +701,7 @@ window.__ModuleLoader__.load({
       const controlId = useId()
       const copy = useCopy(locale)
       const { t } = copy
-      const jobs = useSessionJobs(sessionId, open)
+      const jobs = useSessionJobs(sessionId, open, t)
       useEffect(() => {
         const show = (event) => { if (event.detail === sessionId) setOpen(true) }
         window.addEventListener(OPEN_WORKFLOWS, show)
@@ -515,7 +734,7 @@ window.__ModuleLoader__.load({
       const [selection, setSelection] = useState('')
       const [check, setCheck] = useState(null)
       const [confirm, setConfirm] = useState(false)
-      const action = useAction()
+      const action = useAction(t)
       const instanceUuid = instances.find((item) => item.instance_uuid === selection)?.instance_uuid
         || instances.find((item) => item.instance_uuid === defaultInstanceUuid)?.instance_uuid || instances[0]?.instance_uuid || ''
       const result = check?.instanceUuid === instanceUuid ? check.data : null
@@ -557,7 +776,7 @@ window.__ModuleLoader__.load({
 
     function SettingsContent({ t }) {
       const library = useLibrary()
-      const action = useAction()
+      const action = useAction(t)
       const [apiKey, setApiKey] = useState('')
       const [podUuid, setPodUuid] = useState('')
       const [test, setTest] = useState(null)

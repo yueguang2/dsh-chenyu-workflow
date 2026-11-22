@@ -140,6 +140,26 @@
     "defaultUnknownGpu": "当前默认显卡不在晨羽列表，请重新选卡。",
     "noGpuCapacity": "所选显卡目前没有可用配额，可刷新显卡列表或另选一张。",
     "autoShutdown": "队列任务完成后，会自动关闭由队列启动的算力。",
-    "autoShutdownOff": "自动关机已关闭。"
+    "autoShutdownOff": "自动关机已关闭。",
+    "draftRestored": "已恢复上次未提交的工作流参数",
+    "draftCleared": "已清除草稿",
+    "unknownError": "发生未知错误",
+    "networkError": "网络连接失败，请检查网络设置",
+    "connectionError": "无法连接到晨羽服务器，请稍后重试",
+    "serviceUnavailable": "晨羽服务暂时不可用，请稍后重试",
+    "authError": "API Key 无效或已过期，请检查设置",
+    "permissionError": "权限不足，请检查账户配额",
+    "notFoundError": "请求的资源不存在",
+    "timeoutError": "请求超时，请稍后重试",
+    "quotaError": "账户余额不足或已达配额限制",
+    "gpuUnavailable": "所选显卡暂无可用配额，请稍后重试或更换显卡",
+    "instanceNotFound": "实例不存在或已被删除",
+    "notificationPermissionDenied": "浏览器通知已被阻止，请在浏览器设置中允许通知",
+    "notificationSucceeded": "{name} 已完成",
+    "notificationSucceededBody": "任务执行成功。",
+    "notificationFailed": "{name} 失败",
+    "notificationFailedBody": "任务执行失败。",
+    "notificationCancelled": "{name} 已取消",
+    "notificationCancelledBody": "任务已被取消。"
   }
 }

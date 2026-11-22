@@ -1,10 +1,30 @@
 {
   "name": "@local/dsh-chenyu-workflow",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
-  "description": "在会话里选择晨羽 Pod 镜像版本、云端 ComfyUI 工作流和显卡，按需开机、串行执行、自动关机。",
+  "description": "DeepSeek Harness 插件：选择晨羽智云 Pod 镜像中的 ComfyUI 工作流，按需开机、串行运行、下载结果并自动关机。",
   "type": "module",
   "main": "index.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yueguang2/dsh-chenyu-workflow.git"
+  },
+  "homepage": "https://github.com/yueguang2/dsh-chenyu-workflow#readme",
+  "bugs": {
+    "url": "https://github.com/yueguang2/dsh-chenyu-workflow/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "chenyu",
+    "comfyui",
+    "workflow",
+    "gpu",
+    "text-to-image",
+    "image-to-video"
+  ],
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -18,8 +38,21 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "docs"
   ],
+  "scripts": {
+    "test": "node --test test/queue.test.mjs test/workflow-adapt.test.mjs && vitest run",
+    "test:integration": "node --test test/queue.test.mjs test/workflow-adapt.test.mjs",
+    "test:unit": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "vitest": "^1.0.0"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"

@@ -140,6 +140,26 @@
     "defaultUnknownGpu": "The default GPU is missing from the Chenyu catalog. Select a GPU to proceed.",
     "noGpuCapacity": "The selected GPU has no available capacity. Refresh the GPU list or select another GPU.",
     "autoShutdown": "The queue automatically shuts down compute it started when its work is done.",
-    "autoShutdownOff": "Automatic shutdown is disabled."
+    "autoShutdownOff": "Automatic shutdown is disabled.",
+    "draftRestored": "Previous workflow draft restored",
+    "draftCleared": "Draft cleared",
+    "unknownError": "An unknown error occurred",
+    "networkError": "Network connection failed, please check your network settings",
+    "connectionError": "Cannot connect to Chenyu server, please try again later",
+    "serviceUnavailable": "Chenyu service is temporarily unavailable, please try again later",
+    "authError": "API key is invalid or expired, please check settings",
+    "permissionError": "Insufficient permissions, please check account quota",
+    "notFoundError": "The requested resource does not exist",
+    "timeoutError": "Request timed out, please try again later",
+    "quotaError": "Insufficient account balance or quota limit reached",
+    "gpuUnavailable": "Selected GPU has no available capacity, please try again later or select another GPU",
+    "instanceNotFound": "Instance does not exist or has been deleted",
+    "notificationPermissionDenied": "Browser notifications are blocked, please allow notifications in browser settings",
+    "notificationSucceeded": "{name} finished",
+    "notificationSucceededBody": "The job completed successfully.",
+    "notificationFailed": "{name} failed",
+    "notificationFailedBody": "The job failed.",
+    "notificationCancelled": "{name} was cancelled",
+    "notificationCancelledBody": "The job was cancelled."
   }
 }
