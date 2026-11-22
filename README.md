@@ -1,7 +1,6 @@
 # 晨羽智云工作流 · dsh-chenyu-workflow
 
 [![DSH plugin](https://img.shields.io/badge/DSH-plugin-4B6BFB)](https://github.com/yueguang2/dsh-chenyu-workflow)
-[![DeepSeek Harness](https://img.shields.io/badge/DeepSeek%20Harness-%E2%89%A5%200.2-0B5FFF)](https://github.com/yueguang2/dsh-chenyu-workflow)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A5%2018-339933)](package.json)
 
